@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebGIS Kerusakan Bangunan Pascagempa Flores – Manggarai Timur</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap">
+<style>
+:root{--ink:#1c2530;--mute:#5b6773;--paper:#f3f4f6;--panel:#fff;--line:#d3d8de;--bar:#243342;--acc:#1d5f8f}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 "Public Sans","Segoe UI",system-ui,sans-serif;background:var(--paper);color:var(--ink)}
+header{background:var(--bar);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;gap:24px;align-items:flex-end;flex-wrap:wrap}
+h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.01em}
+header p{margin:2px 0 0;color:#b9c4cf;font-size:13px}
+.fakta{display:flex;gap:0;margin:0}
+.fakta div{padding:0 16px;border-left:1px solid #4a5b6c}
+.fakta dt{font-size:12px;color:#b9c4cf}
+.fakta dd{margin:0;font-weight:700}
+.note{padding:6px 20px;font-size:12.5px;background:#fff;border-bottom:1px solid var(--line);border-left:4px solid #d99a00;color:var(--mute)}
+.note b{color:var(--ink)}
+.app{display:grid;grid-template-columns:330px 1fr;align-items:start}
+aside{position:sticky;top:0;height:100vh;overflow:auto;background:var(--panel);border-right:1px solid var(--line)}
+details{border-bottom:1px solid var(--line)}
+summary{padding:10px 16px;font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+summary::after{content:"+";color:var(--mute);font-weight:400}
+details[open]>summary::after{content:"–"}
+details>div{padding:0 16px 14px}
+label{display:flex;gap:7px;align-items:center;margin:3px 0;cursor:pointer}
+input[type=text],select{width:100%;padding:6px 8px;border:1px solid #aab3bd;border-radius:2px;font:inherit;background:#fff}
+button{background:#fff;color:var(--acc);border:1px solid var(--acc);border-radius:2px;padding:6px 12px;font:inherit;font-weight:600;cursor:pointer;margin:2px 6px 2px 0}
+button:hover{background:var(--acc);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid #d99a00;outline-offset:1px}
+#map{height:66vh;min-height:420px;border-bottom:1px solid var(--line)}
+.analisis{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));background:var(--panel);border-bottom:1px solid var(--line)}
+.blok{padding:14px 18px;border-left:1px solid var(--line)}
+.blok:first-child{border-left:0}
+h2{margin:0 0 6px;font-size:14px;font-weight:700}
+.blok p{margin:0 0 8px;color:var(--mute);font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{background:#eef0f3;font-weight:600}
+.skema{background:var(--panel)}
+.skema td,.skema th{text-align:left}
+.dot{width:11px;height:11px;border-radius:50%;display:inline-block}
+.kec a{color:var(--acc);cursor:pointer;text-decoration:underline}
+.bar{height:6px;background:#b3261e}
+.big{font-size:24px;font-weight:700}
+small{color:var(--mute)}
+@media(max-width:900px){.app{grid-template-columns:1fr}aside{position:static;height:auto}#map{height:60vh}.fakta div:first-child{padding-left:0;border-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Kerusakan bangunan pascagempa Flores M7,7 di Manggarai Timur</h1>
+  <p>Prototipe WebGIS terintegrasi: survei lapangan (RVS), Sentinel‑1, Landsat 8 dan analisis spasial.</p></div>
+  <dl class="fakta">
+    <div><dt>Waktu</dt><dd>15 Agt 2026, 05.58 WITA</dd></div>
+    <div><dt>Magnitudo</dt><dd>M 7,7</dd></div>
+    <div><dt>Intensitas maks.</dt><dd>VII MMI</dd></div>
+    <div><dt>Kedalaman</dt><dd>15 km</dd></div>
+  </dl>
+</header>
+<div class="note"><b id="sumber"></b> <span id="catatan">Batas wilayah, titik bangunan, jalan dan posko di peta ini masih data simulasi untuk prototipe. Angka rekap kabupaten mengikuti verifikasi BNPB di proposal. Ganti dengan data asli.</span></div>
+
+<div class="app">
+<aside>
+  <details open><summary>Saring titik di peta</summary><div>
+    <div id="fkelas"></div>
+    <select id="fjenis"><option value="">Semua jenis bangunan</option></select>
+    <p id="jumlah" style="margin:6px 0 0"></p></div></details>
+  <details open><summary>Lapisan peta</summary><div>
+    <label><input type="checkbox" data-l="bgn" checked> Titik bangunan</label>
+    <label><input type="checkbox" data-l="kec" checked> Batas kecamatan (simulasi)</label>
+    <label><input type="checkbox" data-l="rd" checked> Ruas putus dan jembatan rusak</label>
+    <label><input type="checkbox" data-l="iso" checked> Zona isolasi</label>
+    <label><input type="checkbox" data-l="pos" checked> Posko</label></div></details>
+  <details open><summary>Cari</summary><div>
+    <input type="text" id="cari" placeholder="ID, nama bangunan, atau desa"><small id="hasilcari"></small></div></details>
+  <details open><summary>Rekap BNPB (unit rumah)</summary><div>
+    <table id="bnpb"></table></div></details>
+  <details><summary>Kecamatan</summary><div><div id="kec" class="kec"></div>
+    <small>Klik nama kecamatan untuk memperbesar peta ke wilayah itu.</small></div></details>
+  <details><summary>Ekspor dan data</summary><div>
+    <button id="ecsv">Unduh CSV</button><button id="egeo">Unduh GeoJSON</button>
+    <label style="margin-top:8px;display:block">Muat CSV sendiri<br><input type="file" id="fcsv" accept=".csv"></label>
+    <small>Kolom dikenali: ID_OBJ, Jenis_bangunan, Nama_bangunan, X dan Y (atau lat dan lon), Kategori_kerusakan.</small></div></details>
+</aside>
+
+<section>
+  <div id="map"></div>
+  <div class="analisis">
+    <div class="blok"><h2>Bangunan rusak per kecamatan (sampel)</h2><div id="perkec"></div></div>
+    <div class="blok"><h2>Akses jalan dan isolasi</h2>
+      <p>Buffer 2 km dari ruas putus dan jembatan rusak menandai permukiman yang berpotensi terisolasi.</p>
+      <div class="big" id="isoN">0</div><small>bangunan berada di zona isolasi</small></div>
+    <div class="blok"><h2>Autokorelasi spasial (Moran’s I)</h2>
+      <p>Dihitung di peramban dari kerusakan (RB+RS) per sel grid 0,05° dengan bobot queen, uji permutasi 499×.</p>
+      <div id="moran"></div></div>
+    <div class="blok"><h2>Validasi citra vs survei lapangan</h2>
+      <p>Confusion matrix Sentinel‑1 (baris) vs RVS lapangan (kolom).</p><div id="cm"></div></div>
+  </div>
+  <details class="skema"><summary>Struktur atribut bangunan (PostGIS)</summary><div>
+    <table><tr><th>Kolom</th><th>Tipe</th><th>Isi</th></tr>
+    <tr><td>id_bgn</td><td>text</td><td>MTM‑0001</td></tr>
+    <tr><td>geom</td><td>Point, 4326</td><td>koordinat GNSS / digitasi</td></tr>
+    <tr><td>kecamatan, desa</td><td>text</td><td>dari batas administrasi</td></tr>
+    <tr><td>jenis</td><td>text</td><td>rumah, sekolah, ibadah, faskes, kantor</td></tr>
+    <tr><td>kelas_rvs</td><td>text</td><td>RB, RS, RR, TR</td></tr>
+    <tr><td>kelas_citra</td><td>text</td><td>hasil change detection</td></tr>
+    <tr><td>delta_koh</td><td>real</td><td>penurunan koherensi Sentinel‑1</td></tr>
+    <tr><td>foto_url, tgl_survei</td><td>text, date</td><td>dokumentasi lapangan</td></tr></table></div></details>
+</section>
+</div>
+
+<script>
+/* ===== Konfigurasi: ganti dengan data asli ===== */
+const BNPB = {RB:32, RS:15, RR:9};            // isi angka verifikasi BNPB (unit rumah)
+/* Tempel isi file CSV kamu di antara dua tanda ` ` di bawah ini (satu baris judul + baris data) */
+const CSV_TEXT = `
+`;
+const EPI = [-8.60, 120.70];                // episentrum (simulasi)
+const KEC = [
+  {n:'Borong',c:[-8.74,120.58]},{n:'Kota Komba',c:[-8.63,120.66]},
+  {n:'Rana Mese',c:[-8.55,120.52]},{n:'Lamba Leda',c:[-8.48,120.62]},
+  {n:'Elar',c:[-8.52,120.92]},{n:'Sambi Rampas',c:[-8.72,120.82]}];
+const RD = [
+  {nama:'Jembatan Wae Pesi',tipe:'Jembatan rusak',ll:[-8.66,120.64]},
+  {nama:'Ruas Borong–Kota Komba',tipe:'Ruas putus',ll:[-8.69,120.61]},
+  {nama:'Ruas Elar–Lamba Leda',tipe:'Ruas putus',ll:[-8.50,120.80]}];
+const POSKO = [
+  {nama:'Posko Borong',ll:[-8.745,120.575]},{nama:'Posko Kota Komba',ll:[-8.625,120.665]},
+  {nama:'Posko Elar',ll:[-8.515,120.915]}];
+const KELAS = ['RB','RS','RR','TR','BD'];
+const WARNA = {RB:'#b3261e',RS:'#e08a00',RR:'#e6c200',TR:'#2f8f5b',BD:'#8a8f93'};
+const NAMA = {RB:'Rusak berat',RS:'Rusak sedang',RR:'Rusak ringan',TR:'Tidak rusak',BD:'Belum diketahui'};
+const JENIS = ['rumah','sekolah','ibadah','faskes','kantor'];
+
+/* ===== Data simulasi (acak dengan seed tetap) ===== */
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function simulasi(){
+  const r=rng(2026), g=()=>(r()+r()+r()-1.5)*0.09, out=[]; let n=1;
+  KEC.forEach(k=>{for(let i=0;i<55;i++){
+    const lat=k.c[0]+g(), lon=k.c[1]+g(), d=Math.hypot(lat-EPI[0],lon-EPI[1]), u=r();
+    const pRB=Math.max(.04,.45-d*2.6), pRS=pRB+.25, pRR=pRS+.2;
+    const kr=u<pRB?'RB':u<pRS?'RS':u<pRR?'RR':'TR';
+    let kc=kr; if(r()<.28){const j=KELAS.indexOf(kr)+(r()<.5?-1:1);kc=KELAS[Math.min(3,Math.max(0,j))]}
+    const base={RB:.38,RS:.27,RR:.15,TR:.05}[kc];
+    out.push({id_bgn:'MTM-'+String(n++).padStart(4,'0'),lat:+lat.toFixed(5),lon:+lon.toFixed(5),
+      kecamatan:k.n,desa:'Desa '+String.fromCharCode(65+Math.floor(r()*8))+' '+k.n,
+      jenis:JENIS[Math.floor(r()*r()*5)],kelas_rvs:kr,kelas_citra:kc,delta_koh:+(base+(r()-.5)*.12).toFixed(3)});
+  }});
+  return out;
+}
+let DATA = simulasi();
+
+/* ===== Peta ===== */
+const map=L.map('map').setView([-8.62,120.70],10);
+const baseJalan=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}).addTo(map);
+const baseSat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'});
+const baseOSM=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'});
+L.control.layers({'Jalan (Esri)':baseJalan,'Citra satelit (Esri)':baseSat,'OpenStreetMap (butuh server lokal)':baseOSM},null,{position:'topright'}).addTo(map);
+const LY={bgn:L.layerGroup().addTo(map),kec:L.layerGroup().addTo(map),rd:L.layerGroup().addTo(map),iso:L.layerGroup().addTo(map),pos:L.layerGroup().addTo(map)};
+L.marker(EPI,{title:'Episentrum (simulasi)'}).addTo(map).bindPopup('Episentrum M 7,7 (simulasi)');
+KEC.forEach(k=>L.circle(k.c,{radius:9000,color:'#1f5c4d',weight:1.5,dashArray:'5 5',fillOpacity:.03,interactive:false}).bindTooltip(k.n,{permanent:true,direction:'center',className:''}).addTo(LY.kec));
+RD.forEach(x=>{L.marker(x.ll).bindPopup('<b>'+x.nama+'</b><br>'+x.tipe).addTo(LY.rd);
+  L.circle(x.ll,{radius:2000,color:'#7a3b9c',weight:1,fillOpacity:.12,interactive:false}).addTo(LY.iso)});
+POSKO.forEach(p=>L.circleMarker(p.ll,{radius:8,color:'#0a4d8c',fillColor:'#4aa3e8',fillOpacity:1}).bindPopup('<b>'+p.nama+'</b>').addTo(LY.pos));
+document.querySelectorAll('[data-l]').forEach(c=>c.onchange=()=>c.checked?LY[c.dataset.l].addTo(map):map.removeLayer(LY[c.dataset.l]));
+
+/* ===== Filter ===== */
+const fk=document.getElementById('fkelas'), fj=document.getElementById('fjenis');
+KELAS.forEach(k=>fk.insertAdjacentHTML('beforeend',`<label><input type="checkbox" value="${k}" checked><span class="dot" style="background:${WARNA[k]}"></span>${k} – ${NAMA[k]}</label>`));
+JENIS.forEach(j=>fj.insertAdjacentHTML('beforeend',`<option>${j}</option>`));
+fk.onchange=fj.onchange=render;
+const aktif=()=>[...fk.querySelectorAll('input:checked')].map(i=>i.value);
+const filtered=()=>DATA.filter(d=>aktif().includes(d.kelas_rvs)&&(!fj.value||d.jenis===fj.value));
+const markerById={};
+
+function popupHTML(d){
+  const row=(a,b)=>b?`<tr><td style="border:0;text-align:left;color:#5d6b66;padding:1px 10px 1px 0">${a}</td><td style="border:0;text-align:left;padding:1px 0">${b}</td></tr>`:'';
+  const ada=v=>v&&v!=='-'?v:'';
+  return `<div style="min-width:220px"><div style="font-weight:700;font-size:15px;line-height:1.3">${d.nama||d.id_bgn}</div>
+  <div style="margin:6px 0"><span style="background:${WARNA[d.kelas_rvs]};color:${d.kelas_rvs==='RR'?'#222':'#fff'};padding:2px 10px;border-radius:10px;font-weight:600">${NAMA[d.kelas_rvs]}</span></div>
+  <table style="width:auto;font-size:13px;border:0">${row('ID',ada(d.id_bgn))}${row('Jenis',ada(d.jenis))}${row('Desa',ada(d.desa))}${row('Kecamatan',ada(d.kecamatan))}${row('Kelas citra',d.kelas_citra?NAMA[d.kelas_citra]:'')}${row('Koordinat',d.lat.toFixed(5)+', '+d.lon.toFixed(5))}</table></div>`;
+}
+function render(){
+  LY.bgn.clearLayers(); const f=filtered();
+  f.forEach(d=>{const m=L.circleMarker([d.lat,d.lon],{radius:7,color:'#222',weight:1,fillColor:WARNA[d.kelas_rvs],fillOpacity:.95})
+    .bindPopup(popupHTML(d)).bindTooltip((d.nama||d.id_bgn)+' – '+NAMA[d.kelas_rvs],{sticky:true});
+    m.addTo(LY.bgn); markerById[d.id_bgn]=m});
+  document.getElementById('jumlah').textContent=f.length+' dari '+DATA.length+' titik ditampilkan';
+}
+
+/* ===== Panel angka ===== */
+function bnpb(){
+  const t=BNPB.RB+BNPB.RS+BNPB.RR;
+  document.getElementById('bnpb').innerHTML=`<tr><th>Kelas</th><th>Unit</th></tr>`+
+   ['RB','RS','RR'].map(k=>`<tr><td>${NAMA[k]}</td><td>${BNPB[k].toLocaleString('id-ID')}</td></tr>`).join('')+`<tr><th>Total</th><th>${t.toLocaleString('id-ID')}</th></tr>`;
+}
+function perKec(){
+  const by=DATA.some(d=>d.kecamatan&&d.kecamatan!=='-')?'kecamatan':'jenis', c={};
+  DATA.forEach(d=>c[d[by]]=c[d[by]]||0);
+  DATA.forEach(d=>{if(d.kelas_rvs==='RB'||d.kelas_rvs==='RS')c[d[by]]++});
+  const mx=Math.max(1,...Object.values(c));
+  document.getElementById('perkec').innerHTML=Object.entries(c).map(([n,v])=>`<div style="margin:5px 0"><div style="display:flex;justify-content:space-between"><span>${n}</span><b>${v}</b></div><div class="bar" style="width:${v/mx*100}%"></div></div>`).join('')+'<small>RB + RS, dikelompokkan per '+by+'.</small>';
+  document.getElementById('kec').innerHTML=KEC.map(k=>`<a data-k="${k.n}">${k.n}</a>`).join(' · ');
+  document.querySelectorAll('#kec a').forEach(a=>a.onclick=()=>{const k=KEC.find(x=>x.n===a.dataset.k);map.flyTo(k.c,12)});
+}
+function isolasi(){
+  const n=DATA.filter(d=>RD.some(x=>map.distance([d.lat,d.lon],x.ll)<=2000)).length;
+  document.getElementById('isoN').textContent=n;
+}
+
+/* ===== Moran's I ===== */
+function moran(){
+  const S=0.05, cells={}; let a=1e9,b=-1e9,c=1e9,e=-1e9;
+  DATA.forEach(d=>{const i=Math.floor(d.lat/S),j=Math.floor(d.lon/S);a=Math.min(a,i);b=Math.max(b,i);c=Math.min(c,j);e=Math.max(e,j);
+    if(d.kelas_rvs==='RB'||d.kelas_rvs==='RS')cells[i+','+j]=(cells[i+','+j]||0)+1});
+  const ids=[],nb=[];
+  for(let i=a;i<=b;i++)for(let j=c;j<=e;j++)ids.push([i,j]);
+  const idx={}; ids.forEach((p,k)=>idx[p[0]+','+p[1]]=k);
+  ids.forEach(p=>{const l=[];for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++){if(!di&&!dj)continue;
+    const k=idx[(p[0]+di)+','+(p[1]+dj)];if(k!==undefined)l.push(k)}nb.push(l)});
+  const x=ids.map(p=>cells[p[0]+','+p[1]]||0), N=x.length, W=nb.reduce((s,l)=>s+l.length,0);
+  const calc=v=>{const m=v.reduce((s,q)=>s+q,0)/N,z=v.map(q=>q-m);let num=0,den=0;
+    for(let i=0;i<N;i++){den+=z[i]*z[i];for(const j of nb[i])num+=z[i]*z[j]}return (N/W)*num/den};
+  const I=calc(x), E=-1/(N-1); let ge=0; const r=rng(7), y=x.slice();
+  for(let p=0;p<499;p++){for(let i=N-1;i>0;i--){const j=Math.floor(r()*(i+1));[y[i],y[j]]=[y[j],y[i]]}if(calc(y)>=I)ge++}
+  const pv=(ge+1)/500, tafsir=pv<.05?(I>E?'berkelompok (cluster) signifikan':'menyebar (dispersed) signifikan'):'acak, tidak signifikan';
+  document.getElementById('moran').innerHTML=`<div class="big">I = ${I.toFixed(3)}</div><small>E[I] = ${E.toFixed(3)} · pseudo‑p = ${pv.toFixed(3)} · ${N} sel</small><p>Pola kerusakan: <b>${tafsir}</b>.</p>`;
+}
+
+/* ===== Confusion matrix ===== */
+function cm(){
+  const K=['RB','RS','RR','TR'], D=DATA.filter(d=>K.includes(d.kelas_citra)&&K.includes(d.kelas_rvs));
+  if(!D.length){document.getElementById('cm').innerHTML='<small>Data belum punya kolom kelas_citra (hasil change detection Sentinel‑1). Tambahkan kolom itu (isi: RB/RS/RR/TR) untuk menghitung confusion matrix.</small>';return}
+  const m=K.map(()=>K.map(()=>0));
+  D.forEach(d=>m[K.indexOf(d.kelas_citra)][K.indexOf(d.kelas_rvs)]++);
+  const tot=D.length, ok=K.reduce((s,_,i)=>s+m[i][i],0);
+  const col=K.map((_,j)=>m.reduce((s,r)=>s+r[j],0)), row=m.map(r=>r.reduce((s,q)=>s+q,0));
+  const pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-';
+  let h='<table><tr><th>Citra \\ RVS</th>'+K.map(k=>`<th>${k}</th>`).join('')+'<th>UA</th></tr>';
+  m.forEach((r,i)=>{h+=`<tr><td><b>${K[i]}</b></td>`+r.map((q,j)=>`<td style="${i===j?'background:#dcefe4;font-weight:700':''}">${q}</td>`).join('')+`<td>${pc(r[i],row[i])}</td></tr>`});
+  h+='<tr><td><b>PA</b></td>'+K.map((_,j)=>`<td>${pc(m[j][j],col[j])}</td>`).join('')+`<td><b>OA ${pc(ok,tot)}</b></td></tr></table>`;
+  document.getElementById('cm').innerHTML=h+'<small>OA = akurasi keseluruhan, PA = producer’s, UA = user’s accuracy.</small>';
+}
+
+/* ===== Cari ===== */
+document.getElementById('cari').oninput=e=>{
+  const q=e.target.value.trim().toLowerCase(), o=document.getElementById('hasilcari'); if(!q){o.textContent='';return}
+  const h=DATA.filter(d=>d.id_bgn.toLowerCase().includes(q)||d.desa.toLowerCase().includes(q)||(d.nama||'').toLowerCase().includes(q));
+  o.textContent=h.length?h.length+' hasil, peta diperbesar ke hasil pertama':'Tidak ada hasil. Coba ID seperti MTM-0001.';
+  if(h.length){map.flyTo([h[0].lat,h[0].lon],14);const m=markerById[h[0].id_bgn];if(m)setTimeout(()=>m.openPopup(),800)}
+};
+
+/* ===== Ekspor / impor ===== */
+function unduh(nama,teks,tipe){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([teks],{type:tipe}));a.download=nama;a.click()}
+const KOL=['id_bgn','nama','lat','lon','kecamatan','desa','jenis','kelas_rvs','kelas_citra','delta_koh'];
+document.getElementById('ecsv').onclick=()=>unduh('bangunan_sampel.csv',KOL.join(',')+'\n'+filtered().map(d=>KOL.map(k=>'"'+d[k]+'"').join(',')).join('\n'),'text/csv');
+document.getElementById('egeo').onclick=()=>unduh('bangunan_sampel.geojson',JSON.stringify({type:'FeatureCollection',features:filtered().map(d=>({type:'Feature',geometry:{type:'Point',coordinates:[d.lon,d.lat]},properties:d}))}),'application/geo+json');
+function muatCSV(teks,nama,manual){
+  const L2=teks.replace(/^\uFEFF/,'').trim().split(/\r?\n/), sep=L2[0].includes(';')?';':(L2[0].includes('\t')?'\t':',');
+  const sp=l=>{const o=[];let c='',q=false;for(const ch of l){if(ch==='"')q=!q;else if(ch===sep&&!q){o.push(c.trim());c=''}else c+=ch}o.push(c.trim());return o};
+  const h=sp(L2[0]).map(x=>x.toLowerCase()), pick=(...n)=>h.findIndex(x=>n.includes(x));
+  const ci={id:pick('id_obj','id_bgn','id'),jenis:pick('jenis_bangunan','jenis'),nama:pick('nama_bangunan','nama'),x:pick('x','lat','latitude'),y:pick('y','lon','lng','longitude'),
+    kel:pick('kategori_kerusakan','kelas_rvs','kerusakan'),cit:pick('kelas_citra'),koh:pick('delta_koh'),kec:pick('kecamatan'),desa:pick('desa')};
+  const num=s=>parseFloat(String(s).replace(',','.'));
+  const kelas=s=>{s=String(s||'').toLowerCase();return s.includes('berat')||s==='rb'?'RB':s.includes('sedang')||s==='rs'?'RS':s.includes('ringan')||s==='rr'?'RR':s.includes('tidak')||s==='tr'?'TR':'BD'};
+  const rows=L2.slice(1).map(l=>{const v=sp(l), g=i=>i>=0?(v[i]||''):'';
+    let a=num(g(ci.x)),b=num(g(ci.y)); if(Math.abs(a)>90)[a,b]=[b,a];
+    return {id_bgn:g(ci.id)||'-',nama:g(ci.nama),lat:a,lon:b,kecamatan:g(ci.kec)||'-',desa:g(ci.desa)||'-',jenis:g(ci.jenis)||'-',
+      kelas_rvs:kelas(g(ci.kel)),kelas_citra:ci.cit>=0?kelas(g(ci.cit)):'',delta_koh:num(g(ci.koh))||0}})
+    .filter(o=>!isNaN(o.lat)&&!isNaN(o.lon));
+  if(!rows.length){alert('CSV tidak terbaca. Pastikan ada kolom koordinat (X/Y atau lat/lon) dan kolom kategori kerusakan.');return}
+  DATA=rows;
+  fj.innerHTML='<option value="">Semua jenis bangunan</option>'+[...new Set(DATA.map(d=>d.jenis))].sort().map(j=>`<option>${j}</option>`).join('');
+  refresh(); map.fitBounds(DATA.map(d=>[d.lat,d.lon]));
+  const c={};KELAS.forEach(k=>c[k]=DATA.filter(d=>d.kelas_rvs===k).length);
+  setSumber('[v5] Sumber data: CSV "'+nama+'" – '+DATA.length+' titik (RB '+c.RB+', RS '+c.RS+', RR '+c.RR+', TR '+c.TR+', BD '+c.BD+')',true);
+  if(manual)window.scrollTo({top:0,behavior:'smooth'});
+}
+document.getElementById('fcsv').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+  rd.onload=()=>muatCSV(rd.result,f.name,true);
+  rd.readAsText(f); e.target.value='';};
+
+function setSumber(t,csv){document.getElementById('sumber').textContent=t;
+  if(csv)document.getElementById('catatan').textContent='Titik bangunan memakai CSV kamu. Batas kecamatan, jalan putus, jembatan, posko, dan angka BNPB masih simulasi atau placeholder.'}
+function refresh(){render();bnpb();perKec();isolasi();moran();cm()}
+refresh();
+setSumber('[v5] Sumber data: SIMULASI ('+DATA.length+' titik)',false);
+if(CSV_TEXT.trim())muatCSV(CSV_TEXT,'tertanam di file');
+</script>
+</body>
+</html>
